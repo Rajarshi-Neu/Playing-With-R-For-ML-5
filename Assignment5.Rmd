@@ -1,0 +1,320 @@
+---
+output:
+  html_document: default
+  pdf_document: default
+---
+##Assignment5
+###Intro to Data Mining/Machine Learning
+###Submitted by: Rajarshi Choudhury
+
+
+####Problem1: Build an R Notebook of the bank loan decision tree example in the textbook on pages 136 to 149. Show each step and add appropriate documentation.
+
+```{r}
+credit <- read.csv("credit.csv") #reading the file
+str(credit)
+```
+
+We see  1,000 observations and 21 features, which are a combination of factor and integer data types. 
+
+We now check table() output that likely to feature default. Checking and savings account balance are recorded as categorical variable.
+
+```{r}
+table(credit$checking_balance) #table output for checking
+```
+
+```{r}
+table(credit$savings_balance)#table output for saving
+```
+
+The checking and savings account balance may prove to be important predictors of loan default status. The currency is recorded in Deutsche Marks (DM) since the loan data was obtained from Germany
+
+Some of the loan's features such as its duration and the amount of credit requested are numeric.
+
+```{r}
+summary(credit$months_loan_duration) #summary of loan duration
+```
+
+```{r}
+summary(credit$amount) #summary of amount
+```
+
+The loan amounts-
+range: 250 DM to 18,424 DM
+terms: 4 to 72 months 
+median duration: 18 months
+amount : 2,320 DM.
+
+The default vector indicates whether the loan applicant was unable to meet the agreed payment terms and went into default. A total of 30 percent of the loans in this dataset went into default:
+
+```{r}
+table(credit$default) #Checking default table
+```
+
+we will split our data into two portions:
+  a training dataset to build the decision tree,
+  and a test dataset to evaluate the performance of the model on new data. 
+  
+We will use 90 percent of the data for training and 10 percent for testing, which will provide us with 100 records to simulate new applicants.
+
+Since dataset is not randomly ordered, we will use the sample() function to select 900 values at random out of the sequence of integers from 1 to 1000. Note that the set.seed() function uses the arbitrary value 123.
+
+```{r}
+set.seed(123)
+train_sample <- sample(1000, 900) #creating random sample
+str(train_sample)
+```
+
+By using this vector to select rows from the credit data, we can split it into the 90 percent training and 10 percent test datasets we desired.
+```{r}
+credit_train <- credit[train_sample, ] #training set
+credit_test <- credit[-train_sample, ] #testing set
+prop.table(table(credit_train$default)) #checking training proposition
+```
+
+we should have about 30 percent of defaulted loans in each of the datasets:
+
+```{r}
+prop.table(table(credit_test$default)) #checking testing proposition
+```
+
+For the 1st iteration of credit approval model, the default C5.0 configuration is used. We need to exclude the 17th column in credit_train it from the training data frame as it is the default class variable, but supply it as the target factor vector for classification:
+
+```{r}
+#install.packages("C50")
+library(C50)
+credit_model <- C5.0(credit_train[-17], factor(credit_train$default)) #The credit_model object now contains a C5.0 decision tree. We can see some basic data about the tree by typing its name:
+credit_model
+```
+
+
+The preceding text shows facts about the tree, including function call that generated it, the number of features which are labeled predictors and examples which are labeled samples used to grow the tree. Also tree size is 57, which indicates that the tree is 57 decisions deep-quite a bit larger than the example trees we've considered so far!
+
+To see the tree's decisions, we can call the summary() function on the model:
+```{r}
+summary(credit_model) #summarising model
+```
+
+The preceding output shows the first branches in the decision tree. The first 3 lines could be represented in plain language as:
+1. If the checking account balance is unknown or greater than 200 DM, then classify as "not likely to default."
+2. Otherwise, if the checking account balance is less than zero DM or between one and 200 DM.
+3. And the credit history is perfect or very good, then classify as "likely to default."
+
+The numbers in parentheses indicate the number of examples meeting the criteria for that decision, and the number incorrectly classified by the decision. For instance, on the first line, 412/50 indicates that of the 412 examples reaching the decision, 50 were incorrectly classified as not likely to default.
+
+summary(credit_model) output displays a confusion matrix which indicating model's incorrectly classified records in training data.
+
+The Errors output shows that the model correctly classified 767 of the 900 training instances for an error rate of 14.8 percent. A total of 35 actual no values were incorrectly classified as yes (false positives), while 98 yes values were misclassified as no (false negatives). 
+
+Decision trees are known to overfit the model to the training data. For this reason, the error rate reported on training data may be overly optimistic, and it is important to evaluate decision trees on a test dataset.
+
+To apply our decision tree to the test dataset, we use the predict() function:
+```{r}
+credit_pred <- predict(credit_model, credit_test)#predicting default
+```
+
+This creates a vector of predicted class values, which we can compare to the actual class values by using the CrossTable() function. Setting the prop.c and prop.r parameters to FALSE removes the column and row percentages from the table. The remaining percentage (prop.t) indicates the proportion of records in the cell out of the total number of records:
+
+```{r}
+library(gmodels)
+CrossTable(credit_test$default, credit_pred, prop.chisq = FALSE, prop.c = FALSE, prop.r = FALSE, dnn = c('actual default', 'predicted default')) #developing crosstable
+```
+
+The error rate of the model is high with an accuracy of 74%. In fact, had the model predicted "no default" for each test case, it would be correct 67% of the time, a result not much different from our model, but requiring much less effort! Predicting loan defaults from 900 examples is difficult. Our model performed poorly at identifying applicants who do default on their loans.
+
+We can improve C5.0 algorithm upon the C4.5 algorithm by addition of adaptive boosting. Boosting is rooted in the notion of combining number of weak performing learnersand creating a team that is much stronger than any of the learners as a standalone. Using a combination of several learners with complementary strengths and weaknesses dramatically improve the accuracy of a classifier.
+
+To add boosting to the algorithm, We simply need to add an additional trials parameter indicating the number of separate decision trees to use in the boosted team. The trials parameter sets an upper limit; the algorithm will stop adding trees if it recognizes that additional trials do not seem to be improving the accuracy. Here we will use 10 trials, a number that has become the de facto standard, as research points that this reduces error rates on test data by arond 25%.
+
+```{r}
+credit_boost10 <- C5.0(credit_train[-17], factor(credit_train$default), trials = 10) #adding boosting
+credit_boost10
+```
+
+While examining the resulting model, we can see that some additional lines have been added, indicating the changes.
+
+```{r}
+strtrim(summary(credit_boost10),500) #showing only part of summary to avoid long 
+
+```
+
+The classifier made 34 errors on 900 training examples with an error-rate of 3.8$ which is  an improvement over the 13.9% training error rate noted before boostingwas added. However, let's take a look at test data:
+
+```{r}
+credit_boost_pred10 <- predict(credit_boost10, credit_test)
+CrossTable(credit_test$default, credit_boost_pred10, prop.chisq = FALSE, prop.c = FALSE, prop.r = FALSE, dnn = c('actual default', 'predicted default')) #looking at the crosstable between prediction and actual
+```
+
+The total error rate reduced from 27% prior to boosting down to 18% in the boosted model. The model is still not doing well at predicting defaults, predicting only 20/33 = 61% correctly. The lack of an even greater improvement may be a function of  relatively small training dataset. If boosting can be added easily, why not apply it by default to every decision tree? The reason is twofold. First, if building a decision tree once takes a great deal of computation time, building many trees may be computationally impractical. Secondly, if the training data is very noisy, then boosting might not result in an improvement at all. 
+
+Giving a loan to an applicant who is likely to default can be an expensive mistake. One solution is to reduce the number of false negatives. The C5.0 algorithm assigns a penalty to different types of errors to discourage a tree from making a more costly mistakes. The penalties are designated in a cost matrix specifying how much costlier each error is, relative to other prediction.
+
+To begin constructing the cost matrix, we need to start by specifying the dimensions. As the predicted and actual values =both take two values, yes or no, we need to describe a 2 x 2 matrix, using a list of two vectors, each with two values. At the same time, we'll also name the matrix dimensions to avoid confusion later on:
+
+```{r}
+matrix_dimensions <- list(c("no", "yes"), c("no", "yes"))
+names(matrix_dimensions) <- c("predicted", "actual")
+#Examining the new object shows that our dimensions have been set up correctly:
+matrix_dimensions$predicted
+```
+
+```{R}
+matrix_dimensions$actual
+```
+
+
+Next, penalty is to be assigned for the various types of errors by supplying four values to fill the matrix. Since R fills a matrix by filling columns one by one from top to bottom, we need to supply the values in a specific order:
+. Predicted no, actual no
+. Predicted yes, actual no
+. Predicted no, actual yes
+. Predicted yes, actual yes
+If we consider that a loan default costs the bank four times as much as a missed opportunity. Our penalty values could then be defined as:
+
+```{r}
+error_cost <- matrix(c(0, 1, 4, 0), nrow = 2, dimnames = matrix_dimensions)
+#creates the following matrix:
+error_cost
+```
+
+
+As defined by this matrix, there is no cost assigned when the algorithm classifies a no/yes correctly, but a false negative has a cost of 4 versus a false positive's cost of 1. To see how this impacts classification, let's apply it to the decision tree using the costs parameter of the C5.0() function. We'll otherwise use the same steps as we did earlier:
+
+```{r}
+error_cost <- matrix(c(0, 1, 4, 0), nrow = 2) # intentionally removing dimnames
+credit_cost <- C5.0(credit_train[-17], factor(credit_train$default), costs = error_cost)
+
+credit_cost_pred <- predict(credit_cost, credit_test) #predicting
+CrossTable(credit_test$default, credit_cost_pred, prop.chisq = FALSE, prop.c = FALSE, prop.r = FALSE, dnn = c('actual default', 'predicted default'))
+```
+
+
+Compared to our boosted model, this version makes more mistakes overall: 37% error here versus 18% in the boosted case. However, the types of mistakes are very different. Where the previous models incorrectly classified only 42 and 61 % of defaults correctly, in this model, 79 percent of the actual defaults were predicted to be non-defaults. This result in a reduction of false negatives at the expense of increasing false positives may be acceptable if our cost estimates were accurate
+
+
+
+
+
+
+
+####Problem2: Build and R Notebook of the poisonous mushrooms example using rule learners in the textbook on pages 160 to 168. Show each step and add appropriate documentation.
+
+The dataset includes information on :
+8,124 mushroom samples
+from 23 species of gilled mushrooms, listed in Audubon Society Field Guide to North American Mushrooms (1981). 
+
+In the Field Guide, each of the mushroom species is identified "definitely edible," "definitely poisonous," or "likely poisonous, and not recommended to be eaten." For the purposes of this dataset, the latter group was combined with the "definitely poisonous" group to make two classes: poisonous and nonpoisonous. 
+
+The data dictionary available on the UCI website describes the 22 features of the mushroom samples, including characteristics such as cap shape, cap color, odor, gill size and color, stalk shape, and habitat.
+
+```{r}
+mushrooms <- read.csv("mushrooms.csv", stringsAsFactors = TRUE)
+str(mushrooms) #showing structure of dataset
+```
+
+The output of the str(mushrooms) shows that the data contain 8,124 observations of 23 variables. While most of the str() output is unremarkable, one feature is worth mentioning. Is anything peculiar noticable about the veil_type variable in the following line? 
+$ veil_type : Factor w/ 1 level "partial": 1 1 1 1 1 1 ...
+
+It is odd that a factor has only one level. The data dictionary lists two levels for this feature: partial and universal. But all the examples in  data are classified as partial. It is likely that this data element was somehow coded incorrectly. As the veil type does not vary across samples, it does not provide any useful information for prediction and must be dropped.
+
+```{r}
+mushrooms$veil_type <- NULL
+#By assigning NULL to the veil type vector, R eliminates the feature from the mushrooms data frame.
+```
+
+Before going much further, lets have a quick look at the distribution of the mushroom type class variable.
+```{r}
+table(mushrooms$type) #showing table of mushroom type
+```
+
+About 52% of the mushroom samples (N = 4,208) are edible, while 48% (N = 3,916) are poisonous. For the purposes of this experiment, we will assume 8,214 samples in the mushroom data to be an exhaustive set of all the possible wild mushrooms. It is an important assumption, as we do not need to hold samples out of the training data for testing purposes. We are trying to find rules that accurately depict the complete set of known mushroom types. As such, we can build and test the model on the same data.
+
+If we trained a hypothetical ZeroR classifier on this data, ZeroR ignores all of the features and simply predicts the target's mode, in plain language, its rule would state that all the mushrooms are edible. Obviously, this is not a helpful classifier as it would leave a mushroom gatherer sick or dead with nearly half of the mushroom samples bearing the possibility of being poisonous.
+
+Since simple rules can often be extremely predictive as such, toward the end, we will apply the 1R classifier, which will identify the most predictive single feature of the target class and use it to construct a set of rules.
+
+Using the type ~ . formula, we will allow our first OneR() rule learner to consider all the possible features in the mushroom data while constructing its rules to predict type:
+
+```{r}
+#install.packages("RWeka")
+library(RWeka)
+#The OneR() implementation uses the R formula syntax to specify the model to be trained. The formula syntax uses the ~ operator (known as the tilde) to express the relationship between a target variable and its predictors. The class variable to be learned goes to the left of the tilde, and the predictor features are written on the right, separated by + operators.
+mushroom_1R <- OneR(type ~ ., data = mushrooms) #using OneR
+mushroom_1R
+```
+
+
+
+
+In the first line of the output, we see that the odor feature was selected for rule generation. The categories of, for e.g: almond, anise, and so on, specify rules for whether the mushroom is likely to be edible or poisonous. If the mushroom smells fishy, foul, musty, pungent, spicy, or like creosote, the mushroom is likely to be poisonous. On the other hand, mushrooms with more pleasant smells like almond and anise, and those with no smell at all are predicted to be edible. For the purposes of a field guide for mushroom gathering, these rules could be summarized in a simple rule of thumb: "if the mushroom smells unappetizing, then it is likely to be poisonous."
+
+The last line of the output notes that the rules correctly predicted the edibility of 8,004 of the 8,124 mushroom samples or nearly 99% of the mushroom samples. 
+```{r}
+summary(mushroom_1R) #summarizing
+```
+
+Summary lists a number of different ways to measure the performance of our 1R classifier. Confusion Matrix is similar to those used before. Here, we can see where our rules went wrong. The key is displayed on the right, with a = edible and b = poisonous. Table columns indicate the predicted class of the mushroom while the table rows separate the 4,208 edible mushrooms from the 3,916 poisonous mushrooms. Examining the table, we can see that although the 1R classifier did not classify any edible mushrooms as poisonous, it did classify 120 poisonous mushrooms as edible-which makes for an incredibly dangerous mistake!
+
+Considering that the learner utilized only one single feature, it did well. For a more sophisticated rule learner, let us use JRip(), a Java-based implementation of the RIPPER rule learning algorithm. As with the 1R implementation we used previously, JRip() is included in the RWeka package. If you have not done so yet, be sure to load the package using the library(RWeka) command:
+
+The process of training a JRip() model is comparable to how OneR() model was trained.
+
+Let's train the JRip() rule learner.
+
+```{r}
+mushroom_JRip <- JRip(type ~ ., data = mushrooms) #Using RIPPER by JRip()
+mushroom_JRip
+```
+
+The JRip() classifier learned a total of nine rules from the mushroom data. An easy way to read these rules is to think of them as a list of if-else statements, similar to programming logic. The first three rules could be expressed as:
+. If the odor is foul, then the mushroom type is poisonous
+. If the gill size is narrow and the gill color is buff, then the mushroom type is poisonous
+. If the gill size is narrow and the odor is pungent, then the mushroom type is poisonous
+
+Finally, the ninth rule implies that any mushroom sample that was not covered by the preceding eight rules is edible. Following the example of our programming logic, this can be read as:
+. Else, the mushroom is edible
+
+
+
+####Problem3: So far we have explored four different approaches to classification: kNN, Naive Bayes, C5.0 Decision Trees, and RIPPER Rules. Comment on the differences of the algorithms and when each is generally used. Provide examples of when they work well and when they do not work well. Add your comments to your R Notebook. Be specific and explicit; however, no code examples are needed.
+
+Lets go through each algorithm one by one:
+kNN: k-Nearest neighbour is based on nearest distance of the predicted value from the unknown and is simply calculated as =ROOT(SUM((X-Xj)^2)). It is a simple yet very effective classifier, where the model divides the dataset into various clusters and then takes the cluster in which the predicted set lies. One advantage of knn is it is independent of how the data is structured(normal vs skewed) as the values form a cluster. It is sensitive to the structure and position of data. KNN can be used for both classification as well as regression.
+
+Naive Bayes: The root of Naive Bayes classifier is based on Bayes' Conditional Probability and useful for large datasets. One of the most important advantages of using naive bayes is while other algorithms fail on very small data set, naive bayes usually have better results. It is usually faster when we compare against other methods. One of the major difference in comparison is is that it considers each attribute as independent of the other. They are computationally fast while deciding.
+
+C5.0 Decision Tree: The C5.0 is basically a flowchart like tree structure with different nodes where each node is a feature of an attribute. It is used to determine a  categorical target. Even with missing values, the algorithm works quite well. They are very simple and can be interpreted easily. Also, it in important that there are discrete values in target attribute. Decision trees basically utilizes "divide-and-conquer" method which usually give robust predictions when there exists highly relevant attributes, but not so in the presence of complex interactions.
+
+Ripper Rules: Ripper basically stands for : "Repeated Incremental Pruning to Produce Error Reduction." The Ripper extracts rule directly from data nodes of the decision tree.. It usually progresses through: growth-pruning-optimization and selection. It is usually easy to understand, and more readable. They are robust in large and noisy data. However, they are not so in complex models, or having numeric data.
+
+
+
+
+####Problem4: Much of our focus so far has been on building a single model that is most accurate. In practice, data scientists often construct multiple models and then combine them into a single prediction model. This is referred to as a model ensemble. Two common techniques for assembling such models are boosting and bagging. Do some research and define what model ensembles are, why they are important, and how boosting and bagging function in the construction of assemble models. Be detailed and provide references to your research. You can use this excerpt from Kelleher, MacNamee, and D'Arcy, Fundamentals of Machine Learning for Predictive Data Analytics as a starting point. This book is an excellent resource for those who want to dig deeper into data mining and machine learning.
+
+Ensembling is basically combining two or more similar or dissimilar algorithms. First a set of models is generated, followed by making prdiction models and aggregating the generated outputs. The prediction model consist of a set of models. An ensemble is usually accurate even if the various models in the ensemble perform average as an individual entity. By combining the various algorithms, a more robust model is generated. 
+
+As per Fundamentals of Machine Learning for Predictive Data Analytics by John D. Kelleher, Brian Mac Namee and Aoife D'Arcy; two defining characteristics of ensemble models are:
+
+1. They build multiple different models from the same dataset by inducing each model using a modified version of the dataset.
+2. They make a prediction by aggregating the predictions of different models in the ensemble.
+
+For creating ensembles, there are two standard approaches:
+
+1. Bagging: In bagging, each model in the ensemble vote with equal weight. Each model is trained on a random sample of the dataset where each random sample is the same size as the dataset and sampling is done with replacement. Decision tree algorithms are particularly well-suited to use with bagging as trees are sensitive to changes in dataset, thus increasing model variance and leading to higher accueracy.
+
+2. Boosting: Boosting works by iteratively creating models and adding them to the models, thus providing sequential learning of predictors. First original dataset is considered and equal weights are assigned to each observation. After the first learning, higher weights are assigned to missed missed observation until a limit is reached in accuracy or number of models. Although more accuracy is usually attaind in boosting in comparison to bagging, it also leads to overfitting the model.
+
+
+
+
+Sources:
+1. Machine Learning with R - Second Edition
+2. Fundamentals of Machine Learning for Predictive Data Analytics by John D. Kelleher, Brian Mac Namee and Aoife D'Arcy
+3. https://www.analyticsvidhya.com/blog/2017/02/introduction-to-ensembling-along-with-implementation-in-r/ 
+4. https://thesai.org/Downloads/Volume4No11/Paper_5-Performance_Comparison_between_Na%C3%AFve_Bayes.pdf
+5. https://www.ncbi.nlm.nih.gov/pmc/articles/PMC3060133/
+
+
+
+
+
