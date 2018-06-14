@@ -8,7 +8,7 @@ output:
 ###Submitted by: Rajarshi Choudhury
 
 
-####Problem1: Build an R Notebook of the bank loan decision tree example in the textbook on pages 136 to 149. Show each step and add appropriate documentation.
+####Problem1: Build an R Notebook of the bank loan decision tree example. Show each step and add appropriate documentation.
 
 ```{r}
 credit <- read.csv("credit.csv") #reading the file
@@ -196,7 +196,7 @@ Compared to our boosted model, this version makes more mistakes overall: 37% err
 
 
 
-####Problem2: Build and R Notebook of the poisonous mushrooms example using rule learners in the textbook on pages 160 to 168. Show each step and add appropriate documentation.
+####Problem2: Build and R Notebook of the poisonous mushrooms example using rule learners. Show each step and add appropriate documentation.
 
 The dataset includes information on :
 8,124 mushroom samples
